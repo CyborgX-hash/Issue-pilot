@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
+import authRoutes from './routes/auth.routes.js';
+import githubRoutes from './routes/github.routes.js';
 import healthRoutes from './routes/health.routes.js';
 
 const app = express();
@@ -36,6 +38,10 @@ app.use(express.urlencoded({ extended: true }));
 // Health check endpoint
 app.use('/api', healthRoutes);
 
+// API Route groups
+app.use('/api', authRoutes);
+app.use('/api', githubRoutes);
+
 // Base info endpoint
 app.get('/api', (req, res) => {
   res.json({
@@ -45,5 +51,9 @@ app.get('/api', (req, res) => {
     documentation: '/docs',
   });
 });
+
+// Centralized 404 & Error handlers
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 export default app;
