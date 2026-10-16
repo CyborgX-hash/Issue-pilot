@@ -6,6 +6,8 @@ import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import authRoutes from './routes/auth.routes.js';
 import githubRoutes from './routes/github.routes.js';
+import repositoryRoutes from './routes/repository.routes.js';
+import issueRoutes from './routes/issue.routes.js';
 import healthRoutes from './routes/health.routes.js';
 
 const app = express();
@@ -41,6 +43,8 @@ app.use('/api', healthRoutes);
 // API Route groups
 app.use('/api', authRoutes);
 app.use('/api', githubRoutes);
+app.use('/api', repositoryRoutes);
+app.use('/api', issueRoutes);
 
 // Base info endpoint
 app.get('/api', (req, res) => {
