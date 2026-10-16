@@ -1,0 +1,188 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String               @id @default(uuid())
+  githubId        BigInt               @unique
+  githubUsername  String               @db.VarChar(255)
+  email           String?              @db.VarChar(255)
+  avatarUrl       String?              @db.VarChar(512)
+  accessToken     String?              @db.Text
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  installations   GitHubInstallation[]
+  approvedActions TriageAction[]       @relation("ApprovedBy")
+
+  @@index([githubUsername])
+}
+
+model GitHubInstallation {
+  id                   String       @id @default(uuid())
+  githubInstallationId BigInt       @unique
+  accountLogin         String       @db.VarChar(255)
+  accountId            BigInt
+  accountAvatarUrl     String?      @db.VarChar(512)
+  accountType          String       @default("User") @db.VarChar(50)
+  status               String       @default("active") @db.VarChar(50)
+  userId               String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  user                 User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  repositories         Repository[]
+
+  @@index([accountLogin])
+  @@index([userId])
+}
+
+model Repository {
+  id              String             @id @default(uuid())
+  githubRepoId    BigInt             @unique
+  owner           String             @db.VarChar(255)
+  name            String             @db.VarChar(255)
+  fullName        String             @unique @db.VarChar(512)
+  description     String?            @db.Text
+  visibility      String             @default("public") @db.VarChar(50)
+  defaultBranch   String             @default("main") @db.VarChar(100)
+  isActive        Boolean            @default(true)
+  lastSyncAt      DateTime?
+  installationId  String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  installation    GitHubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  issues          Issue[]
+
+  @@index([owner, name])
+  @@index([installationId])
+}
+
+model Issue {
+  id               String          @id @default(uuid())
+  githubIssueId    BigInt          @unique
+  issueNumber      Int
+  title            String          @db.VarChar(512)
+  body             String?         @db.LongText
+  state            String          @default("open") @db.VarChar(50)
+  authorUsername   String?         @db.VarChar(255)
+  authorAvatarUrl  String?         @db.VarChar(512)
+  htmlUrl          String          @db.VarChar(512)
+  labelsJson       Json?
+  embeddingJson    Json?
+  repositoryId     String
+  githubCreatedAt  DateTime?
+  githubUpdatedAt  DateTime?
+  githubClosedAt   DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  repository       Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  analyses         IssueAnalysis[]
+  triageActions    TriageAction[]
+
+  @@unique([repositoryId, issueNumber])
+  @@index([repositoryId, state])
+  @@index([githubIssueId])
+}
+
+enum IssueCategory {
+  BUG
+  FEATURE_REQUEST
+  ENHANCEMENT
+  DOCUMENTATION
+  QUESTION
+  OTHER
+}
+
+enum IssuePriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model IssueAnalysis {
+  id                  String        @id @default(uuid())
+  issueId             String
+  category            IssueCategory @default(OTHER)
+  priority            IssuePriority @default(MEDIUM)
+  summary             String        @db.Text
+  reasoning           String        @db.Text
+  suggestedLabels     Json
+  missingInfo         Json
+  duplicateCandidates Json
+  modelId             String        @db.VarChar(100)
+  promptVersion       String        @default("v1.0") @db.VarChar(50)
+  confidence          Float?
+  createdAt           DateTime      @default(now())
+
+  issue               Issue         @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([category])
+  @@index([priority])
+}
+
+enum ActionType {
+  APPLY_LABELS
+  POST_COMMENT
+  REQUEST_INFO
+}
+
+enum ActionApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+  FAILED
+}
+
+enum ExecutionStatus {
+  PENDING
+  EXECUTED
+  FAILED
+}
+
+model TriageAction {
+  id              String               @id @default(uuid())
+  issueId         String
+  actionType      ActionType           @default(APPLY_LABELS)
+  proposedPayload Json
+  approvalStatus  ActionApprovalStatus @default(PENDING)
+  approvingUserId String?
+  approvedAt      DateTime?
+  executionStatus ExecutionStatus      @default(PENDING)
+  gitHubResult    Json?
+  failureDetails  String?              @db.Text
+  createdAt       DateTime             @default(now())
+  executedAt      DateTime?
+
+  issue           Issue                @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  approvingUser   User?                @relation("ApprovedBy", fields: [approvingUserId], references: [id], onDelete: SetNull)
+
+  @@index([issueId, approvalStatus])
+  @@index([approvalStatus])
+}
+
+model WebhookEvent {
+  id               String    @id @default(uuid())
+  deliveryId       String    @unique @db.VarChar(255)
+  eventType        String    @db.VarChar(100)
+  action           String?   @db.VarChar(100)
+  payload          Json
+  processingStatus String    @default("PENDING") @db.VarChar(50)
+  errorMessage     String?   @db.Text
+  createdAt        DateTime  @default(now())
+  processedAt      DateTime?
+
+  @@index([deliveryId])
+  @@index([eventType])
+  @@index([processingStatus])
+}
