@@ -73,3 +73,85 @@ export async function getIssueById(req, res, next) {
     next(err);
   }
 }
+
+export async function analyzeIssue(req, res, next) {
+  try {
+    const { issueId } = req.params;
+
+    const issue = await prisma.issue.findUnique({
+      where: { id: issueId },
+      include: {
+        repository: {
+          include: { installation: true },
+        },
+      },
+    });
+
+    if (!issue) {
+      return next(new AppError('Issue not found.', 404));
+    }
+
+    const isOwner = issue.repository.installation.userId === req.user.id ||
+      issue.repository.installation.accountLogin.toLowerCase() === req.user.githubUsername.toLowerCase();
+
+    if (!isOwner) {
+      return next(new AppError('Unauthorized to analyze this issue.', 403));
+    }
+
+    const { aiTriageService } = await import('../services/ai-triage.service.js');
+    const analysis = await aiTriageService.analyzeIssue(issue.id);
+
+    res.json({
+      success: true,
+      message: 'Issue analyzed successfully.',
+      analysis,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getIssueAnalysis(req, res, next) {
+  try {
+    const { issueId } = req.params;
+
+    const analysis = await prisma.issueAnalysis.findFirst({
+      where: { issueId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        issue: {
+          select: {
+            id: true,
+            issueNumber: true,
+            title: true,
+            repository: {
+              select: {
+                id: true,
+                fullName: true,
+                installation: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!analysis) {
+      return next(new AppError('No analysis found for this issue.', 404));
+    }
+
+    const isOwner = analysis.issue.repository.installation.userId === req.user.id ||
+      analysis.issue.repository.installation.accountLogin.toLowerCase() === req.user.githubUsername.toLowerCase();
+
+    if (!isOwner) {
+      return next(new AppError('Unauthorized to view this analysis.', 403));
+    }
+
+    res.json({
+      success: true,
+      analysis,
+    });
+  } catch (err) {
+    next(err);
+  }
+}

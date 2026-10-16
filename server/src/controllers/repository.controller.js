@@ -282,3 +282,21 @@ export async function getRepositoryStats(req, res, next) {
     next(err);
   }
 }
+
+export async function batchAnalyzeRepository(req, res, next) {
+  try {
+    const repo = req.repository;
+    const maxIssues = Math.min(50, Math.max(1, parseInt(req.body.maxIssues) || 10));
+
+    const { aiTriageService } = await import('../services/ai-triage.service.js');
+    const results = await aiTriageService.batchAnalyze(repo.id, maxIssues);
+
+    res.json({
+      success: true,
+      message: `Completed batch analysis for ${results.length} issues.`,
+      results,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
