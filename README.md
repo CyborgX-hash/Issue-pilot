@@ -122,13 +122,13 @@ npm run test:server
 
 ## Current Status & Roadmap
 
-- [x] Monorepo architecture & documentation
-- [ ] Prisma schema, MySQL database connection, and health endpoint (Milestone 2)
-- [ ] GitHub App authentication, installation handshake, and session management (Milestone 3)
-- [ ] Repository selection and issue synchronization (Milestone 4)
-- [ ] Open-weight Gemma AI triage and strict Zod validation (Milestone 5)
-- [ ] Semantic duplicate detection and embeddings (Milestone 6)
-- [ ] React dashboard, issue explorer, and detail views (Milestone 7)
-- [ ] Approval queue and authenticated GitHub write operations (Milestone 8)
-- [ ] Webhook processing and sync improvements (Milestone 9)
-- [ ] Security hardening, automated testing suite, and deployment readiness (Milestone 10)
+- [x] Monorepo architecture & documentation (Milestone 1)
+- [x] Prisma schema, MySQL database connection, and health endpoint (Milestone 2)
+- [x] GitHub App authentication, installation handshake, and session management (Milestone 3)
+- [x] Repository selection and issue synchronization (Milestone 4)
+- [x] Open-weight Gemma AI triage and strict Zod validation (Milestone 5)
+- [x] Semantic duplicate detection and embeddings (Milestone 6)
+- [x] React dashboard, issue explorer, and detail views (Milestone 7)
+- [x] Approval queue and authenticated GitHub write operations (Milestone 8)
+- [x] Webhook processing and sync improvements (Milestone 9)
+- [x] Security hardening, automated testing suite, and deployment readiness (Milestone 10)
