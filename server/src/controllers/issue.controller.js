@@ -155,3 +155,41 @@ export async function getIssueAnalysis(req, res, next) {
     next(err);
   }
 }
+
+export async function getIssueDuplicates(req, res, next) {
+  try {
+    const { issueId } = req.params;
+    const threshold = parseFloat(req.query.threshold) || 0.50;
+
+    const issue = await prisma.issue.findUnique({
+      where: { id: issueId },
+      include: {
+        repository: {
+          include: { installation: true },
+        },
+      },
+    });
+
+    if (!issue) {
+      return next(new AppError('Issue not found.', 404));
+    }
+
+    const isOwner = issue.repository.installation.userId === req.user.id ||
+      issue.repository.installation.accountLogin.toLowerCase() === req.user.githubUsername.toLowerCase();
+
+    if (!isOwner) {
+      return next(new AppError('Unauthorized to view duplicates for this issue.', 403));
+    }
+
+    const { duplicateDetectorService } = await import('../services/duplicate-detector.service.js');
+    const duplicates = await duplicateDetectorService.findDuplicateCandidates(issue.id, { threshold });
+
+    res.json({
+      success: true,
+      issueId: issue.id,
+      duplicates,
+    });
+  } catch (err) {
+    next(err);
+  }
+}

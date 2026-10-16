@@ -147,6 +147,10 @@ ${issue.body || 'No description provided.'}
       availableLabelNames.has(label.toLowerCase())
     );
 
+    // Detect potential duplicates within the repository
+    const { duplicateDetectorService } = await import('./duplicate-detector.service.js');
+    const duplicateCandidates = await duplicateDetectorService.findDuplicateCandidates(issue.id);
+
     // Save IssueAnalysis in MySQL
     const analysis = await prisma.issueAnalysis.create({
       data: {
@@ -157,7 +161,7 @@ ${issue.body || 'No description provided.'}
         reasoning: analysisData.reasoning,
         suggestedLabels: sanitizedLabels,
         missingInfo: analysisData.missingInformation,
-        duplicateCandidates: [],
+        duplicateCandidates: duplicateCandidates,
         modelId: this.provider.model || 'gemma2-9b-it',
         promptVersion: 'v1.0',
         confidence: analysisData.confidence,
