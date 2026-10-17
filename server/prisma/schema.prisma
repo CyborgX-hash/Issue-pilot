@@ -1,5 +1,5 @@
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -69,7 +69,7 @@ model Issue {
   githubIssueId    BigInt          @unique
   issueNumber      Int
   title            String          @db.VarChar(512)
-  body             String?         @db.LongText
+  body             String?         @db.Text
   state            String          @default("open") @db.VarChar(50)
   authorUsername   String?         @db.VarChar(255)
   authorAvatarUrl  String?         @db.VarChar(512)
