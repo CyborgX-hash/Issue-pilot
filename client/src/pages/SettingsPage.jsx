@@ -94,7 +94,7 @@ export function SettingsPage() {
           </h2>
 
           <a
-            href="https://github.com/apps/issuepilot/installations/new"
+            href="https://github.com/apps/issue-botx/installations/new"
             target="_blank"
             rel="noreferrer"
             className="text-xs text-brand-600 hover:text-brand-700 flex items-center space-x-1 font-medium"

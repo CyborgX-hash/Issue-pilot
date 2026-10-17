@@ -89,15 +89,15 @@ export function RepositoryListPage() {
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
 
-          <a
-            href="https://github.com/apps/issuepilot/installations/new"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center px-3 py-1.5 bg-ink-primary hover:bg-ink-secondary text-white text-xs font-medium rounded transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            Install on GitHub
-          </a>
+            <a
+              href="https://github.com/apps/issue-botx/installations/new"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center px-3 py-1.5 bg-ink-primary hover:bg-ink-secondary text-white text-xs font-medium rounded transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Install on GitHub
+            </a>
         </div>
       </div>
 
@@ -155,7 +155,7 @@ export function RepositoryListPage() {
           icon={FolderGit2}
           action={
             <a
-              href="https://github.com/apps/issuepilot/installations/new"
+              href="https://github.com/apps/issue-botx/installations/new"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center px-3 py-1.5 bg-ink-primary text-white text-xs font-medium rounded hover:bg-ink-secondary"
