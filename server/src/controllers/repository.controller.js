@@ -91,11 +91,10 @@ export async function listRepositories(req, res, next) {
               });
             }
           }
+        } catch (autoSyncErr) {
+          logger.warn('Failed to auto-sync installations from GitHub', { error: autoSyncErr.message });
         }
-      } catch (autoSyncErr) {
-        logger.warn('Failed to auto-sync installations from GitHub', { error: autoSyncErr.message });
       }
-    }
     // Repositories associated with installations the user has access to
     const repositories = await prisma.repository.findMany({
       where: {
