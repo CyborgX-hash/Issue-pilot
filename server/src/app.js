@@ -20,8 +20,30 @@ app.use(helmet({
 }));
 
 // CORS setup
+const allowedOrigins = [
+  env.FRONTEND_URL,
+  (env.FRONTEND_URL || '').replace(/\/+$/, ''),
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+].filter(Boolean);
+
 app.use(cors({
-  origin: [env.FRONTEND_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like curl, postman, server-to-server)
+    if (!origin) return callback(null, true);
+    try {
+      const parsed = new URL(origin);
+      if (
+        allowedOrigins.includes(origin) ||
+        allowedOrigins.includes(origin.replace(/\/+$/, '')) ||
+        parsed.hostname.endsWith('.vercel.app')
+      ) {
+        return callback(null, true);
+      }
+    } catch {}
+    logger.warn('CORS blocked request from origin', { origin });
+    return callback(new Error(`CORS policy blocked access from origin: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

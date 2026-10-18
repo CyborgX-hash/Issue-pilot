@@ -1,8 +1,14 @@
+const DEFAULT_RENDER_BACKEND_URL = 'https://issue-pilot.onrender.com';
+
 export function getBackendUrl() {
+  if (import.meta.env.VITE_BACKEND_URL) {
+    return import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return '';
+  }
   return (
-    import.meta.env.VITE_BACKEND_URL ||
-    localStorage.getItem('issuepilot_backend_url') ||
-    ''
+    localStorage.getItem('issuepilot_backend_url') || DEFAULT_RENDER_BACKEND_URL
   ).replace(/\/+$/, '');
 }
 

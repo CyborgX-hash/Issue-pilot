@@ -15,7 +15,8 @@ export async function getGitHubAuthUrl(req, res) {
     });
   }
 
-  const redirectUri = `${env.BACKEND_URL}/api/auth/github/callback`;
+  const backendBase = (env.BACKEND_URL || '').replace(/\/+$/, '');
+  const redirectUri = `${backendBase}/api/auth/github/callback`;
   const scope = 'read:user user:email repo';
   const state = Math.random().toString(36).substring(7);
 
@@ -135,7 +136,8 @@ export async function handleGitHubCallback(req, res, next) {
     });
 
     // Also attach token in query for client storage if needed in cross-origin environments
-    res.redirect(`${env.FRONTEND_URL}/dashboard?auth_success=true&token=${token}`);
+    const frontendBase = (env.FRONTEND_URL || '').replace(/\/+$/, '');
+    res.redirect(`${frontendBase}/dashboard?auth_success=true&token=${token}`);
   } catch (err) {
     next(err);
   }
