@@ -9,31 +9,49 @@ export async function listRepositories(req, res, next) {
     // Auto-discover installations for the authenticated user from GitHub if configured
     if (githubAppService.isConfigured()) {
       try {
-        const appOctokit = githubAppService.getAppOctokit();
-        const { data: ghInstallations } = await appOctokit.rest.apps.listInstallations();
+        let ghInstallations = [];
+
+        // 1. Try discovering installations directly via the user's OAuth access token (supports orgs & any account)
+        if (req.user.accessToken) {
+          try {
+            const userOctokit = await githubAppService.getUserOctokit(req.user.accessToken);
+            const { data: userInstData } = await userOctokit.rest.apps.listInstallationsForAuthenticatedUser();
+            ghInstallations = userInstData.installations || [];
+          } catch (userInstErr) {
+            logger.debug('Could not fetch user installations via OAuth token, falling back to app client', { error: userInstErr.message });
+          }
+        }
+
+        // 2. If no user-scoped installations found, fall back to App-level installations matching username
+        if (ghInstallations.length === 0) {
+          const appOctokit = githubAppService.getAppOctokit();
+          const { data: allAppInst } = await appOctokit.rest.apps.listInstallations();
+          ghInstallations = allAppInst.filter(
+            inst => inst.account?.login?.toLowerCase() === req.user.githubUsername.toLowerCase()
+          );
+        }
 
         for (const ghInst of ghInstallations) {
-          if (ghInst.account?.login?.toLowerCase() === req.user.githubUsername.toLowerCase()) {
-            const instRecord = await prisma.gitHubInstallation.upsert({
-              where: { githubInstallationId: BigInt(ghInst.id) },
-              update: {
-                accountLogin: ghInst.account.login,
-                accountId: BigInt(ghInst.account.id),
-                accountAvatarUrl: ghInst.account.avatar_url,
-                accountType: ghInst.account.type,
-                userId: req.user.id,
-                status: 'active',
-              },
-              create: {
-                githubInstallationId: BigInt(ghInst.id),
-                accountLogin: ghInst.account.login,
-                accountId: BigInt(ghInst.account.id),
-                accountAvatarUrl: ghInst.account.avatar_url,
-                accountType: ghInst.account.type,
-                userId: req.user.id,
-                status: 'active',
-              },
-            });
+          const instRecord = await prisma.gitHubInstallation.upsert({
+            where: { githubInstallationId: BigInt(ghInst.id) },
+            update: {
+              accountLogin: ghInst.account.login,
+              accountId: BigInt(ghInst.account.id),
+              accountAvatarUrl: ghInst.account.avatar_url,
+              accountType: ghInst.account.type,
+              userId: req.user.id,
+              status: 'active',
+            },
+            create: {
+              githubInstallationId: BigInt(ghInst.id),
+              accountLogin: ghInst.account.login,
+              accountId: BigInt(ghInst.account.id),
+              accountAvatarUrl: ghInst.account.avatar_url,
+              accountType: ghInst.account.type,
+              userId: req.user.id,
+              status: 'active',
+            },
+          });
 
             // Fetch and sync repositories for this installation
             try {
