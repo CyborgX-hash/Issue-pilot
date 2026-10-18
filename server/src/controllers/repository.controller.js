@@ -347,11 +347,12 @@ export async function getRepositoryIssues(req, res, next) {
 export async function syncRepository(req, res, next) {
   try {
     const repo = req.repository;
-    const result = await githubSyncService.syncRepositoryIssues(repo.id);
+    const userAccessToken = req.user?.accessToken || null;
+    const result = await githubSyncService.syncRepositoryIssues(repo.id, undefined, userAccessToken);
 
     res.json({
       success: true,
-      message: `Synchronized ${result.syncedCount} issues (${result.prsSkipped} PRs filtered out).`,
+      message: result.message || `Synchronized ${result.syncedCount} issues (${result.prsSkipped} PRs filtered out).`,
       result,
     });
   } catch (err) {

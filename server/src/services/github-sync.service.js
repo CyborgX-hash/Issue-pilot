@@ -7,8 +7,15 @@ export class GitHubSyncService {
   /**
    * Synchronize open and closed issues for a repository from GitHub.
    * Pull requests are strictly excluded.
+   *
+   * For forked repositories where issues are disabled, this automatically
+   * fetches issues from the upstream parent repository instead.
+   *
+   * @param {string} repositoryId - The internal repository ID.
+   * @param {object} options - Sync options.
+   * @param {string} [userAccessToken] - The authenticated user's OAuth token (needed for fork detection).
    */
-  async syncRepositoryIssues(repositoryId, options = { maxPages: 5, perPage: 100 }) {
+  async syncRepositoryIssues(repositoryId, options = { maxPages: 5, perPage: 100 }, userAccessToken = null) {
     const repository = await prisma.repository.findUnique({
       where: { id: repositoryId },
       include: {
@@ -26,6 +33,43 @@ export class GitHubSyncService {
 
     const octokit = await githubAppService.getInstallationOctokit(repository.installation.githubInstallationId);
 
+    // Detect if this is a fork and resolve the upstream source for issues
+    let syncOwner = repository.owner;
+    let syncRepo = repository.name;
+    let isForkSync = false;
+
+    try {
+      const { data: repoMeta } = await octokit.rest.repos.get({
+        owner: repository.owner,
+        repo: repository.name,
+      });
+
+      if (repoMeta.fork && !repoMeta.has_issues && repoMeta.parent) {
+        // Fork with issues disabled → fetch issues from upstream parent
+        syncOwner = repoMeta.parent.owner.login;
+        syncRepo = repoMeta.parent.name;
+        isForkSync = true;
+
+        logger.info('Repository is a fork with issues disabled, syncing from upstream parent', {
+          fork: repository.fullName,
+          upstream: `${syncOwner}/${syncRepo}`,
+        });
+      }
+    } catch (metaErr) {
+      logger.debug('Could not fetch repo metadata for fork detection', { error: metaErr.message });
+    }
+
+    // For fetching issues from upstream repos we may need the user's token
+    // since the installation token might not have access to the upstream repo
+    let issueOctokit = octokit;
+    if (isForkSync && userAccessToken) {
+      try {
+        issueOctokit = await githubAppService.getUserOctokit(userAccessToken);
+      } catch (tokenErr) {
+        logger.debug('Could not create user octokit for upstream fetch, using installation token', { error: tokenErr.message });
+      }
+    }
+
     let page = 1;
     let totalSynced = 0;
     let totalPrsSkipped = 0;
@@ -33,12 +77,14 @@ export class GitHubSyncService {
     logger.info('Starting issue synchronization for repository', {
       repository: repository.fullName,
       repositoryId: repository.id,
+      syncSource: `${syncOwner}/${syncRepo}`,
+      isForkSync,
     });
 
     while (page <= options.maxPages) {
-      const response = await octokit.rest.issues.listForRepo({
-        owner: repository.owner,
-        repo: repository.name,
+      const response = await issueOctokit.rest.issues.listForRepo({
+        owner: syncOwner,
+        repo: syncRepo,
         state: 'all',
         per_page: options.perPage,
         page,
@@ -104,16 +150,25 @@ export class GitHubSyncService {
       data: { lastSyncAt: new Date() },
     });
 
+    const syncMessage = isForkSync
+      ? `Synced ${totalSynced} issues from upstream ${syncOwner}/${syncRepo} (${totalPrsSkipped} PRs filtered).`
+      : `Synchronized ${totalSynced} issues (${totalPrsSkipped} PRs filtered out).`;
+
     logger.info('Issue synchronization completed', {
       repository: repository.fullName,
+      syncSource: `${syncOwner}/${syncRepo}`,
       totalSynced,
       totalPrsSkipped,
+      isForkSync,
     });
 
     return {
       syncedCount: totalSynced,
       prsSkipped: totalPrsSkipped,
       lastSyncAt: new Date(),
+      isForkSync,
+      syncSource: isForkSync ? `${syncOwner}/${syncRepo}` : null,
+      message: syncMessage,
     };
   }
 
