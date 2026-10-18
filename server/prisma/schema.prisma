@@ -19,6 +19,7 @@ model User {
 
   installations   GitHubInstallation[]
   approvedActions TriageAction[]       @relation("ApprovedBy")
+  repoAccesses    UserRepositoryAccess[]
 
   @@index([githubUsername])
 }
@@ -43,25 +44,40 @@ model GitHubInstallation {
 }
 
 model Repository {
-  id              String             @id @default(uuid())
-  githubRepoId    BigInt             @unique
-  owner           String             @db.VarChar(255)
-  name            String             @db.VarChar(255)
-  fullName        String             @unique @db.VarChar(512)
-  description     String?            @db.Text
-  visibility      String             @default("public") @db.VarChar(50)
-  defaultBranch   String             @default("main") @db.VarChar(100)
-  isActive        Boolean            @default(true)
+  id              String                 @id @default(uuid())
+  githubRepoId    BigInt                 @unique
+  owner           String                 @db.VarChar(255)
+  name            String                 @db.VarChar(255)
+  fullName        String                 @unique @db.VarChar(512)
+  description     String?                @db.Text
+  visibility      String                 @default("public") @db.VarChar(50)
+  defaultBranch   String                 @default("main") @db.VarChar(100)
+  isActive        Boolean                @default(true)
   lastSyncAt      DateTime?
   installationId  String
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
-  installation    GitHubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  installation    GitHubInstallation     @relation(fields: [installationId], references: [id], onDelete: Cascade)
   issues          Issue[]
+  userAccesses    UserRepositoryAccess[]
 
   @@index([owner, name])
   @@index([installationId])
+}
+
+model UserRepositoryAccess {
+  id           String     @id @default(uuid())
+  userId       String
+  repositoryId String
+  createdAt    DateTime   @default(now())
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, repositoryId])
+  @@index([userId])
+  @@index([repositoryId])
 }
 
 model Issue {

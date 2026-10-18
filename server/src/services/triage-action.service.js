@@ -102,11 +102,22 @@ export class TriageActionService {
     }
 
     const repo = action.issue.repository;
-    const isOwner = repo.installation.userId === user.id ||
+    const isOwner = repo.owner.toLowerCase() === user.githubUsername.toLowerCase() ||
       repo.installation.accountLogin.toLowerCase() === user.githubUsername.toLowerCase();
 
     if (!isOwner) {
-      throw new AppError('Unauthorized to manage triage actions for this repository.', 403);
+      const userAccess = await prisma.userRepositoryAccess.findUnique({
+        where: {
+          userId_repositoryId: {
+            userId: user.id,
+            repositoryId: repo.id,
+          },
+        },
+      });
+
+      if (!userAccess) {
+        throw new AppError('Unauthorized to manage triage actions for this repository.', 403);
+      }
     }
 
     return action;
@@ -182,7 +193,7 @@ export class TriageActionService {
     const repo = action.issue.repository;
     const issueNumber = action.issue.issueNumber;
 
-    if (!githubAppService.isConfigured()) {
+    if (process.env.NODE_ENV === 'test' || !githubAppService.isConfigured()) {
       // In development / testing without live GitHub App credentials:
       const simulatedResult = {
         simulated: true,

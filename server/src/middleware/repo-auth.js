@@ -25,11 +25,27 @@ export async function requireRepoAccess(req, res, next) {
       return next(new AppError('Repository installation is inactive or suspended.', 403));
     }
 
-    // Direct installation ownership check
-    const isOwner = repository.installation.userId === req.user.id ||
+    // Direct repository ownership check
+    const isOwner = repository.owner.toLowerCase() === req.user.githubUsername.toLowerCase() ||
       repository.installation.accountLogin.toLowerCase() === req.user.githubUsername.toLowerCase();
 
     if (isOwner) {
+      req.repository = repository;
+      req.installation = repository.installation;
+      return next();
+    }
+
+    // Check database-persisted access
+    const userAccess = await prisma.userRepositoryAccess.findUnique({
+      where: {
+        userId_repositoryId: {
+          userId: req.user.id,
+          repositoryId: repository.id,
+        },
+      },
+    });
+
+    if (userAccess) {
       req.repository = repository;
       req.installation = repository.installation;
       return next();

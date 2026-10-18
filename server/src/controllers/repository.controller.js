@@ -10,11 +10,12 @@ export async function listRepositories(req, res, next) {
     if (githubAppService.isConfigured()) {
       try {
         let ghInstallations = [];
+        let userOctokit = null;
 
         // 1. Try discovering installations directly via the user's OAuth access token (supports orgs & any account)
         if (req.user.accessToken) {
           try {
-            const userOctokit = await githubAppService.getUserOctokit(req.user.accessToken);
+            userOctokit = await githubAppService.getUserOctokit(req.user.accessToken);
             const { data: userInstData } = await userOctokit.rest.apps.listInstallationsForAuthenticatedUser();
             ghInstallations = userInstData.installations || [];
           } catch (userInstErr) {
@@ -32,6 +33,9 @@ export async function listRepositories(req, res, next) {
         }
 
         for (const ghInst of ghInstallations) {
+          const isDirectOwner = ghInst.account?.login?.toLowerCase() === req.user.githubUsername.toLowerCase();
+
+          // Upsert installation record without overwriting other users' installation ownership
           const instRecord = await prisma.gitHubInstallation.upsert({
             where: { githubInstallationId: BigInt(ghInst.id) },
             update: {
@@ -39,8 +43,8 @@ export async function listRepositories(req, res, next) {
               accountId: BigInt(ghInst.account.id),
               accountAvatarUrl: ghInst.account.avatar_url,
               accountType: ghInst.account.type,
-              userId: req.user.id,
               status: 'active',
+              ...(isDirectOwner ? { userId: req.user.id } : {}),
             },
             create: {
               githubInstallationId: BigInt(ghInst.id),
@@ -48,64 +52,99 @@ export async function listRepositories(req, res, next) {
               accountId: BigInt(ghInst.account.id),
               accountAvatarUrl: ghInst.account.avatar_url,
               accountType: ghInst.account.type,
-              userId: req.user.id,
+              userId: isDirectOwner ? req.user.id : null,
               status: 'active',
             },
           });
 
-            // Fetch and sync repositories for this installation
-            try {
+          // Fetch only repositories accessible to THIS authenticated user
+          try {
+            let accessibleRepos = [];
+
+            if (userOctokit) {
+              // GitHub API returns only repositories the authenticated user is allowed to access
+              let repoPage = 1;
+              while (repoPage <= 5) {
+                const { data: userRepoData } = await userOctokit.rest.apps.listInstallationReposForAuthenticatedUser({
+                  installation_id: ghInst.id,
+                  per_page: 100,
+                  page: repoPage,
+                });
+                const fetched = userRepoData.repositories || [];
+                accessibleRepos.push(...fetched);
+                if (fetched.length < 100 || accessibleRepos.length >= (userRepoData.total_count || 0)) {
+                  break;
+                }
+                repoPage++;
+              }
+            } else if (isDirectOwner) {
+              // Fallback to app installation token only if user owns the account
               const instOctokit = await githubAppService.getInstallationOctokit(ghInst.id);
               const { data: reposData } = await instOctokit.rest.apps.listReposAccessibleToInstallation({ per_page: 100 });
+              accessibleRepos = reposData.repositories || [];
+            }
 
-              for (const ghRepo of reposData.repositories) {
-                await prisma.repository.upsert({
-                  where: { githubRepoId: BigInt(ghRepo.id) },
-                  update: {
-                    owner: ghRepo.owner.login,
-                    name: ghRepo.name,
-                    fullName: ghRepo.full_name,
-                    description: ghRepo.description || null,
-                    visibility: ghRepo.private ? 'private' : 'public',
-                    defaultBranch: ghRepo.default_branch || 'main',
-                    isActive: true,
-                    installationId: instRecord.id,
+            for (const ghRepo of accessibleRepos) {
+              const repo = await prisma.repository.upsert({
+                where: { githubRepoId: BigInt(ghRepo.id) },
+                update: {
+                  owner: ghRepo.owner.login,
+                  name: ghRepo.name,
+                  fullName: ghRepo.full_name,
+                  description: ghRepo.description || null,
+                  visibility: ghRepo.private ? 'private' : 'public',
+                  defaultBranch: ghRepo.default_branch || 'main',
+                  isActive: true,
+                  installationId: instRecord.id,
+                },
+                create: {
+                  githubRepoId: BigInt(ghRepo.id),
+                  owner: ghRepo.owner.login,
+                  name: ghRepo.name,
+                  fullName: ghRepo.full_name,
+                  description: ghRepo.description || null,
+                  visibility: ghRepo.private ? 'private' : 'public',
+                  defaultBranch: ghRepo.default_branch || 'main',
+                  isActive: true,
+                  installationId: instRecord.id,
+                },
+              });
+
+              // Grant access to this repository for the authenticated user
+              await prisma.userRepositoryAccess.upsert({
+                where: {
+                  userId_repositoryId: {
+                    userId: req.user.id,
+                    repositoryId: repo.id,
                   },
-                  create: {
-                    githubRepoId: BigInt(ghRepo.id),
-                    owner: ghRepo.owner.login,
-                    name: ghRepo.name,
-                    fullName: ghRepo.full_name,
-                    description: ghRepo.description || null,
-                    visibility: ghRepo.private ? 'private' : 'public',
-                    defaultBranch: ghRepo.default_branch || 'main',
-                    isActive: true,
-                    installationId: instRecord.id,
-                  },
-                });
-              }
-            } catch (repoErr) {
-              logger.warn('Failed to auto-fetch repositories for installation', {
-                installationId: ghInst.id,
-                error: repoErr.message,
+                },
+                update: {},
+                create: {
+                  userId: req.user.id,
+                  repositoryId: repo.id,
+                },
               });
             }
+          } catch (repoErr) {
+            logger.warn('Failed to fetch accessible repositories for installation', {
+              installationId: ghInst.id,
+              error: repoErr.message,
+            });
           }
-        } catch (autoSyncErr) {
-          logger.warn('Failed to auto-sync installations from GitHub', { error: autoSyncErr.message });
         }
+      } catch (autoSyncErr) {
+        logger.warn('Failed to auto-sync installations from GitHub', { error: autoSyncErr.message });
       }
-    // Repositories associated with installations the user has access to
+    }
+
+    // Repositories strictly owned by or explicitly accessible to the authenticated user
     const repositories = await prisma.repository.findMany({
       where: {
         isActive: true,
-        installation: {
-          OR: [
-            { userId: req.user.id },
-            { accountLogin: req.user.githubUsername },
-          ],
-          status: 'active',
-        },
+        OR: [
+          { owner: { equals: req.user.githubUsername, mode: 'insensitive' } },
+          { userAccesses: { some: { userId: req.user.id } } },
+        ],
       },
       include: {
         _count: {
