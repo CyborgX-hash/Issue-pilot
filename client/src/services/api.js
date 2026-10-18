@@ -1,7 +1,24 @@
-const API_BASE = import.meta.env.VITE_BACKEND_URL || '';
+export function getBackendUrl() {
+  return (
+    import.meta.env.VITE_BACKEND_URL ||
+    localStorage.getItem('issuepilot_backend_url') ||
+    ''
+  ).replace(/\/+$/, '');
+}
+
+export function setBackendUrl(url) {
+  const cleaned = (url || '').trim().replace(/\/+$/, '');
+  if (cleaned) {
+    localStorage.setItem('issuepilot_backend_url', cleaned);
+  } else {
+    localStorage.removeItem('issuepilot_backend_url');
+  }
+  return cleaned;
+}
 
 async function request(endpoint, options = {}) {
-  const url = `${API_BASE}${endpoint}`;
+  const base = getBackendUrl();
+  const url = `${base}${endpoint}`;
   const token = localStorage.getItem('issuepilot_token');
 
   const headers = {
@@ -18,6 +35,13 @@ async function request(endpoint, options = {}) {
     ...options,
     headers,
   });
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('text/html')) {
+    throw new Error(
+      `Received HTML instead of JSON from ${url}. Your frontend is not connected to the Render backend.`
+    );
+  }
 
   const data = await response.json().catch(() => ({}));
 

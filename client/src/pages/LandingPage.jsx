@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 export function LandingPage() {
-  const { user, login } = useAuth();
+  const { user, login, error: authError } = useAuth();
   const [activeFaq, setActiveFaq] = useState(null);
 
   const toggleFaq = (index) => {
@@ -75,6 +75,16 @@ export function LandingPage() {
           <p className="text-base sm:text-lg text-ink-muted leading-relaxed">
             IssuePilot is an automated AI-powered copilot for open-source maintainers and engineering teams. It ingests incoming GitHub issues, classifies bug reports, flags semantic duplicates, recommends existing repository labels, and drafts clarification responses — all safeguarded with a <strong className="text-ink-primary font-medium">100% human-in-the-loop review queue</strong>.
           </p>
+
+          {authError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-start space-x-2">
+              <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="font-semibold block">Connection Error:</span>
+                <span>{authError}</span>
+              </div>
+            </div>
+          )}
 
           <div className="pt-2 flex flex-wrap items-center gap-3">
             {user ? (
